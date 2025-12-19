@@ -1,0 +1,23 @@
+
+# Serveur Web
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.9.0
+python-multipart>=0.0.12
+
+# Agent IA
+smolagents>=0.1.0
+litellm>=1.55.0
+
+
+# Docs
+python-docx>=1.1.0
+reportlab>=4.0.0
+openpyxl>=3.1.0
+Pillow>=10.0.0
+
+
+# Utils
+python-dotenv>=1.0.0
+duckduckgo-search>=6.1.0
+ddgs
