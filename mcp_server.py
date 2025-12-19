@@ -11,15 +11,27 @@ app = FastAPI()
 # Configuration CORS pour permettre les requêtes depuis le frontend Vue.js
 # En production, utilisez une variable d'environnement pour les origines autorisées
 import os
-ALLOWED_ORIGINS = os.getenv(
+# Lire la configuration CORS depuis l'environnement.
+# - Définissez ALLOWED_ORIGINS="https://votre-frontend.onrender.com,https://autre" pour restreindre
+# - Pour un debug rapide, définissez ALLOW_ALL_ORIGINS=true (à n'utiliser qu'en dev)
+raw_allowed = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
-).split(",")
+)
+allow_all = os.getenv("ALLOW_ALL_ORIGINS", "false").lower() in ("1", "true", "yes")
+if allow_all:
+    cors_origins = ["*"]
+else:
+    cors_origins = [o.strip() for o in raw_allowed.split(",") if o.strip()]
+
+# Désactiver les credentials lorsque toutes les origines sont autorisées (sécurité)
+allow_credentials = not allow_all
+print(f"🔐 CORS origins configured: {cors_origins} (ALLOW_ALL_ORIGINS={allow_all}, allow_credentials={allow_credentials})")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
