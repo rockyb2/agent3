@@ -49,10 +49,11 @@ def create_agent():
         
     )
 
-KEYWORDS_FILES=[
-            "génère", "crée", "produis", "exporte",
-            "fichier", "pdf", "word", "excel", "envoyer", "mail"
-        ],
+KEYWORDS_FILES = [
+    "génère", "crée", "produis", "exporte",
+    "fichier", "pdf", "word", "excel", "envoyer", "mail"
+]
+
 
 def user_explicitly_requested_file(message: str) -> bool:
     msg = message.lower()
