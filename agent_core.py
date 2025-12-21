@@ -18,13 +18,51 @@ def create_agent():
             BuildExcelPro(),
             SendMail()
         ],
-        max_steps=5
+        max_steps=5,
+        prompt_templates="""
+                    RÔLE :
+                    Tu es avant tout un assistant conversationnel professionnel.
+
+                    RÈGLES STRICTES (OBLIGATOIRES) :
+                    1. Tu NE DOIS JAMAIS générer de fichier (Word, PDF, Excel, email, etc.)
+                    tant que l'utilisateur n'a PAS formulé une demande explicite et claire.
+
+                    2. Une demande explicite signifie que l'utilisateur utilise des verbes comme :
+                    "génère", "crée", "produis", "exporte", "envoie", "fais-moi un fichier".
+
+                    3. Si la demande de l'utilisateur est ambiguë ou vague :
+                    - Tu DOIS poser une question de clarification
+                    - Tu NE DOIS PAS utiliser d'outil
+
+                    4. Par défaut :
+                    - Tu réponds uniquement en TEXTE
+                    - Tu adoptes un ton clair, professionnel et concis
+
+                    5. Tu réponds TOUJOURS en français.
+                    6. Tu n'utilises JAMAIS les outils sans autorisation explicite.
+
+                    OBJECTIF :
+                    Converser normalement avec l'utilisateur, répondre à ses questions,
+                    expliquer, conseiller, analyser — sans générer de fichiers par défaut.
+                    """,
+        
+        
     )
+
+KEYWORDS_FILES=[
+            "génère", "crée", "produis", "exporte",
+            "fichier", "pdf", "word", "excel", "envoyer", "mail"
+        ],
+
+def user_explicitly_requested_file(message: str) -> bool:
+    msg = message.lower()
+    return any(k in msg for k in KEYWORDS_FILES)
 
 
 # --- Conversation helper API ---
 # Fournit `chat_with_agent(session_id, message)` pour gérer l'historique par session
 _agent_cache = None
+
 
 def _get_agent_cached():
     global _agent_cache
@@ -62,14 +100,23 @@ def chat_with_agent(session_id: str, message: str) -> dict:
     history.append({"role": "user", "content": message})
 
     agent = _get_agent_cached()
-    output = agent.run(message)
+    # 🔒 GARDE-FOU
+    if user_explicitly_requested_file(message):
+        output = agent.run(message)
+    else:
+        output = agent.run(
+            f"Réponds uniquement en texte, sans utiliser d'outil.\n\n{message}"
+        )
 
-    # Support pour outils qui renvoient "texte||chemin_du_fichier"
+    # Gestion fichier éventuel
     if "||" in output:
-        text, file_path = [p.strip() for p in output.split("||", 1)]
-        history.append({"role": "assistant", "content": text})
+        text, file_path = output.split("||", 1)
+        history.append({"role": "assistant", "content": text.strip()})
         _save_history(session_id, history)
-        return {"content": text, "file_path": file_path}
+        return {
+            "content": text.strip(),
+            "file_path": file_path.strip()
+        }
 
     history.append({"role": "assistant", "content": output})
     _save_history(session_id, history)
