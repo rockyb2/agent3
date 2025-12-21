@@ -98,6 +98,20 @@ def _find_file_by_basename(basename: str):
 def chat(req: MCPRequest):
     try:
         resp = chat_with_agent(req.session_id, req.message)
+
+        # Normaliser la réponse au format attendu (dict avec 'content' et éventuellement 'file_path')
+        if isinstance(resp, str):
+            resp = {"content": resp}
+        elif not isinstance(resp, dict):
+            try:
+                resp = dict(resp)
+            except Exception:
+                # En dernier recours, convertir en chaîne
+                resp = {"content": str(resp)}
+
+        # Log utile pour debug (type et contenu limités)
+        print(f"/mcp/chat: response type={type(resp).__name__}, keys={list(resp.keys())}")
+
         response = {"answer": resp.get("content")}
         file_path = resp.get("file_path")
         if file_path:
@@ -112,6 +126,9 @@ def chat(req: MCPRequest):
                 response["file_path"] = file_path
         return response
     except Exception as e:
+        # Afficher la trace d'erreur côté serveur pour diagnostic
+        import traceback
+        traceback.print_exc()
         return {"answer": f"Erreur agent: {str(e)}"}
 
 
