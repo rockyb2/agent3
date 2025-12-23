@@ -1,5 +1,5 @@
 # agent_core.py
-from smolagents import CodeAgent, LiteLLMModel
+from smolagents import ToolCallingAgent, LiteLLMModel
 import os
 import json
 from typing import Optional
@@ -7,7 +7,22 @@ from tools import BuildWord, BuildPDF, BuildExcelPro, SendMail
 
 
 def create_agent():
-    return CodeAgent(
+    custom_instructions = """
+RÔLE :
+Tu es un assistant conversationnel professionnel et prudent.
+
+RÈGLES STRICTES (À RESPECTER ABSOLUMENT) :
+1. Tu NE DOIS JAMAIS appeler un outil pour générer un fichier ou envoyer un email sans demande EXPLICITE contenant des verbes comme : génère, crée, produis, exporte, envoie, fais-moi un fichier, etc.
+2. Si la demande est vague ou ambiguë, pose une question de clarification sans appeler d'outil.
+3. Par défaut, réponds UNIQUEMENT en texte clair, professionnel et concis.
+4. Réponds TOUJOURS en français.
+5. N'appelle les outils que si c'est strictement nécessaire et autorisé par l'utilisateur.
+
+OBJECTIF :
+Converser normalement, répondre aux questions, expliquer – sans actions automatiques.
+"""
+
+    return ToolCallingAgent(
         model=LiteLLMModel(
             model_id="mistral/mistral-large-latest",
             api_key=os.getenv("MISTRAL_API_KEY")
@@ -18,35 +33,8 @@ def create_agent():
             BuildExcelPro(),
             SendMail()
         ],
-        max_steps=5,
-        prompt_templates="""
-                    RÔLE :
-                    Tu es avant tout un assistant conversationnel professionnel.
-
-                    RÈGLES STRICTES (OBLIGATOIRES) :
-                    1. Tu NE DOIS JAMAIS générer de fichier (Word, PDF, Excel, email, etc.)
-                    tant que l'utilisateur n'a PAS formulé une demande explicite et claire.
-
-                    2. Une demande explicite signifie que l'utilisateur utilise des verbes comme :
-                    "génère", "crée", "produis", "exporte", "envoie", "fais-moi un fichier".
-
-                    3. Si la demande de l'utilisateur est ambiguë ou vague :
-                    - Tu DOIS poser une question de clarification
-                    - Tu NE DOIS PAS utiliser d'outil
-
-                    4. Par défaut :
-                    - Tu réponds uniquement en TEXTE
-                    - Tu adoptes un ton clair, professionnel et concis
-
-                    5. Tu réponds TOUJOURS en français.
-                    6. Tu n'utilises JAMAIS les outils sans autorisation explicite.
-
-                    OBJECTIF :
-                    Converser normalement avec l'utilisateur, répondre à ses questions,
-                    expliquer, conseiller, analyser — sans générer de fichiers par défaut.
-                    """,
-        
-        
+        max_steps=10,  # Augmente un peu si besoin
+        instructions=custom_instructions
     )
 
 KEYWORDS_FILES = [
@@ -102,12 +90,7 @@ def chat_with_agent(session_id: str, message: str) -> dict:
 
     agent = _get_agent_cached()
     # 🔒 GARDE-FOU
-    if user_explicitly_requested_file(message):
-        output = agent.run(message)
-    else:
-        output = agent.run(
-            f"Réponds uniquement en texte, sans utiliser d'outil.\n\n{message}"
-        )
+    output = agent.run(message)
 
     # Gestion fichier éventuel
     if "||" in output:

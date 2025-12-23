@@ -1,7 +1,8 @@
 from smolagents import Tool
 from docx import Document
-from docx.shared import Pt, Inches
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.shared import Pt, Inches, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.style import WD_STYLE_TYPE
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
@@ -169,51 +170,96 @@ class BuildPDF(Tool):
 class BuildWord(Tool):
     name = "BuildWord"
     description = (
-        "Crée un fichier Word (.docx) professionnel avec titre stylisé et contenu formaté."
+        "Crée un document Word professionnel (.docx) à partir d'un contenu structuré. "
+        "Utilise cette outil pour générer des lettres de motivation, CV, rapports, etc. "
+        "Le résultat sera un fichier Word avec mise en page propre (marges, police, interligne)."
     )
 
     inputs = {
-        "name": {"type": "string", "description": "Nom du fichier sans extension"},
-        "title": {"type": "string", "description": "Titre du document"},
-        "content": {"type": "string", "description": "Contenu du document"},
+        "title": {"type": "string", "description": "Titre principal du document (ex: 'Lettre de Motivation')"},
+        "recipient": {"type": "string", "description": "Nom et adresse du destinataire (multiligne possible)"},
+        "sender": {"type": "string", "description": "Vos coordonnées (nom, adresse, email, tel)"},
+        "date": {"type": "string", "description": "Date (ex: 'Paris, le 23 décembre 2025')"},
+        "subject": {"type": "string", "description": "Objet de la lettre"},
+        "body": {"type": "string", "description": "Corps complet de la lettre en texte brut (paragraphes séparés par \\n\\n). Tu peux inclure des listes avec - item"},
+        "filename": {"type": "string", "description": "Nom du fichier sans extension (ex: 'Lettre_Motivation_Jonathan')"}
     }
+
     output_type = "string"
 
-    def forward(self, name: str, title: str, content: str) -> str:
+    def forward(self, title: str, recipient: str, sender: str, date: str, subject: str, body: str, filename: str):
         try:
             doc = Document()
 
-            # STYLE DU TITRE
-            title_p = doc.add_heading("", level=1)
-            run = title_p.add_run(title)
-            run.bold = True
-            run.font.size = Pt(20)
-            title_p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            # === Configuration page professionnelle (format lettre française) ===
+            section = doc.sections[0]
+            section.top_margin = Cm(2.5)
+            section.bottom_margin = Cm(2.5)
+            section.left_margin = Cm(2.5)
+            section.right_margin = Cm(2.5)
 
-            doc.add_paragraph("")  # espace
+            # === Style global ===
+            style = doc.styles['Normal']
+            font = style.font
+            font.name = 'Arial'
+            font.size = Pt(11)
 
-            # STYLE DU TEXTE
-            paragraph = doc.add_paragraph(content)
-            for run in paragraph.runs:
-                run.font.size = Pt(12)
+            # === En-tête : Vos coordonnées (aligné à droite) ===
+            p = doc.add_paragraph(sender)
+            p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-            # MARGES PRO
-            sections = doc.sections
-            for section in sections:
-                section.top_margin = Inches(1)
-                section.bottom_margin = Inches(1)
-                section.left_margin = Inches(1)
-                section.right_margin = Inches(1)
+            # === Destinataire (aligné à gauche) ===
+            doc.add_paragraph(recipient)
 
-            file_name = f"{name}.docx"
-            doc.save(file_name)
+            # === Date (aligné à gauche ou droite selon norme) ===
+            doc.add_paragraph(date)
 
-            return f"Document Word '{file_name}' généré avec succès||{file_name}"
+            # === Objet ===
+            p = doc.add_paragraph()
+            p.add_run('Objet : ').bold = True
+            p.add_run(subject)
+
+            doc.add_paragraph()  # Espace
+
+            # === Titre centré ===
+            title_p = doc.add_paragraph(title)
+            title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            title_run = title_p.runs[0]
+            title_run.font.size = Pt(16)
+            title_run.bold = True
+
+            doc.add_paragraph()  # Espace
+
+            # === Corps de la lettre ===
+            paragraphs = body.split('\n\n')
+            for para_text in paragraphs:
+                para_text = para_text.strip()
+                if para_text.startswith('- '):
+                    # Liste à puces
+                    items = para_text.split('\n- ')
+                    for i, item in enumerate(items):
+                        if i == 0 and not item.startswith('- '):
+                            item = item[2:] if item.startswith('- ') else item
+                        p = doc.add_paragraph(item.strip('- '), style='List Bullet')
+                else:
+                    doc.add_paragraph(para_text)
+
+            # === Formule de politesse ===
+            doc.add_paragraph()
+            doc.add_paragraph("Je vous prie d’agréer, Madame, Monsieur, l’expression de mes salutations distinguées.")
+
+            doc.add_paragraph()  # Espace signature
+            doc.add_paragraph("Jonathan Zadi")
+
+            # === Sauvegarde ===
+            safe_filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            file_path = f"{safe_filename}.docx"
+            doc.save(file_path)
+
+            return f"Fichier Word professionnel créé avec succès : {os.path.abspath(file_path)} || {os.path.abspath(file_path)}"
 
         except Exception as e:
-            return f"Erreur Word : {str(e)}"
-
-
+            return f"Erreur lors de la création du document Word : {str(e)}"
 
 
 class SendMail(Tool):
@@ -227,8 +273,8 @@ class SendMail(Tool):
     inputs = {
         "smtp_server": {"type": "string", "description": "Adresse du serveur SMTP (ex: smtp.gmail.com)"},
         "smtp_port": {"type": "number", "description": "Port SMTP (ex: 587 pour TLS, 465 pour SSL)"},
-        "sender_email": {"type": "string", "description": "Adresse email expéditeur (ex: email@gmail.com)"},
-        "sender_password": {"type": "string", "description": "Mot de passe ou App Password de l'expéditeur (ex:password générer)"},
+        "sender_email": {"type": "string", "description": "Adresse email expéditeur (ex: davjonathan6@gmail.com)"},
+        "sender_password": {"type": "string", "description": "Mot de passe ou App Password de l'expéditeur (ex: qbcqkupoknwgeenf)"},
         "recipient_email": {"type": "string", "description": "Adresse email destinataire (peut être une liste séparée par des virgules)"},
         "subject": {"type": "string", "description": "Sujet du mail"},
         "message": {"type": "string", "description": "Contenu du mail (texte ou HTML si is_html=True)"},
