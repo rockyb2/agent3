@@ -6,6 +6,10 @@ from pydantic import BaseModel
 from agent_core import create_agent, chat_with_agent
 from urllib.parse import quote
 
+# Charger les variables d'environnement depuis le fichier .env (si présent)
+from dotenv import load_dotenv
+load_dotenv()
+
 app = FastAPI()
 
 # Configuration CORS pour permettre les requêtes depuis le frontend Vue.js
@@ -34,6 +38,7 @@ app.add_middleware(
     allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Type"],  # Important pour download
 )
 
 

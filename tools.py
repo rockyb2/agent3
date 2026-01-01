@@ -13,11 +13,14 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.chart import BarChart, Reference
 from openpyxl.drawing.image import Image
 
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
-import smtplib
+# from email.mime.text import MIMEText
+# from email.mime.multipart import MIMEMultipart
+# from email.mime.base import MIMEBase
+# from email import encoders
+# import smtplib
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
+import base64
 import os
 import logging
 from typing import Optional
@@ -262,93 +265,160 @@ class BuildWord(Tool):
             return f"Erreur lors de la création du document Word : {str(e)}"
 
 
+# class SendMail(Tool):
+#     name = "send_mail"
+#     description = (
+#         "Envoie un e-mail avec support HTML et pièces jointes optionnelles. "
+#         "Inputs: smtp_server, smtp_port, sender_email, sender_password, "
+#         "recipient_email, subject, message, is_html (optionnel), attachment_path (optionnel)"
+#     )
+
+#     inputs = {
+#         "smtp_server": {"type": "string", "description": "Adresse du serveur SMTP (ex: smtp.gmail.com)"},
+#         "smtp_port": {"type": "number", "description": "Port SMTP (ex: 587 pour TLS, 465 pour SSL)"},
+#         "sender_email": {"type": "string", "description": "Adresse email expéditeur (ex: davjonathan6@gmail.com)"},
+#         "sender_password": {"type": "string", "description": "Mot de passe ou App Password de l'expéditeur (ex: qbcqkupoknwgeenf)"},
+#         "recipient_email": {"type": "string", "description": "Adresse email destinataire (peut être une liste séparée par des virgules)"},
+#         "subject": {"type": "string", "description": "Sujet du mail"},
+#         "message": {"type": "string", "description": "Contenu du mail (texte ou HTML si is_html=True)"},
+#         "is_html": {"type": "boolean", "description": "Si True, le message est interprété comme HTML (défaut: False)", "nullable": True},
+#         "attachment_path": {"type": "string", "description": "Chemin vers un fichier à joindre (optionnel)", "nullable": True}
+#     }
+
+#     output_type = "string"
+
+#     def forward(
+#         self,
+#         smtp_server: str,
+#         smtp_port: int,
+#         sender_email: str,
+#         sender_password: str,
+#         recipient_email: str,
+#         subject: str,
+#         message: str,
+#         is_html: bool = False,
+#         attachment_path: Optional[str] = None
+#     ) -> str:
+#         try:
+#             # Validation
+#             if not all([smtp_server, sender_email, sender_password, recipient_email, subject, message]):
+#                 return "Erreur: Tous les champs obligatoires doivent être remplis."
+
+#             # Création du mail
+#             msg = MIMEMultipart()
+#             msg["From"] = sender_email
+#             msg["To"] = recipient_email
+#             msg["Subject"] = subject
+
+#             # Ajouter le message (texte ou HTML)
+#             msg_type = "html" if is_html else "plain"
+#             msg.attach(MIMEText(message, msg_type))
+
+#             # Ajouter la pièce jointe si fournie
+#             if attachment_path and os.path.isfile(attachment_path):
+#                 with open(attachment_path, "rb") as attachment:
+#                     part = MIMEBase('application', 'octet-stream')
+#                     part.set_payload(attachment.read())
+#                     encoders.encode_base64(part)
+#                     part.add_header(
+#                         'Content-Disposition',
+#                         f'attachment; filename= {os.path.basename(attachment_path)}'
+#                     )
+#                     msg.attach(part)
+#                 logger.info(f"Pièce jointe ajoutée: {attachment_path}")
+
+#             # Connexion SMTP
+#             if smtp_port == 465:
+#                 # SSL
+#                 server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+#             else:
+#                 # TLS
+#                 server = smtplib.SMTP(smtp_server, smtp_port)
+#                 server.starttls()
+
+#             server.login(sender_email, sender_password)
+
+#             # Envoi
+#             server.send_message(msg)
+#             server.quit()
+
+#             logger.info(f"Email envoyé de {sender_email} à {recipient_email}")
+#             attachment_info = f" avec pièce jointe ({os.path.basename(attachment_path)})" if attachment_path else ""
+#             return f"E-mail envoyé à {recipient_email} avec succès !{attachment_info}"
+
+#         except FileNotFoundError:
+#             return f"Erreur: Le fichier de pièce jointe '{attachment_path}' n'existe pas."
+#         except smtplib.SMTPAuthenticationError:
+#             return "Erreur: Échec de l'authentification. Vérifiez l'email et le mot de passe."
+#         except smtplib.SMTPException as e:
+#             return f"Erreur SMTP lors de l'envoi du mail : {e}"
+#         except Exception as e:
+#             logger.error(f"Erreur envoi email: {e}")
+#             return f"Erreur lors de l'envoi du mail : {e}"
+
 class SendMail(Tool):
     name = "send_mail"
     description = (
-        "Envoie un e-mail avec support HTML et pièces jointes optionnelles. "
-        "Inputs: smtp_server, smtp_port, sender_email, sender_password, "
-        "recipient_email, subject, message, is_html (optionnel), attachment_path (optionnel)"
+        "Envoie un email via Brevo (Sendinblue) avec support HTML "
+        "et pièce jointe optionnelle."
     )
 
     inputs = {
-        "smtp_server": {"type": "string", "description": "Adresse du serveur SMTP (ex: smtp.gmail.com)"},
-        "smtp_port": {"type": "number", "description": "Port SMTP (ex: 587 pour TLS, 465 pour SSL)"},
-        "sender_email": {"type": "string", "description": "Adresse email expéditeur (ex: davjonathan6@gmail.com)"},
-        "sender_password": {"type": "string", "description": "Mot de passe ou App Password de l'expéditeur (ex: qbcqkupoknwgeenf)"},
-        "recipient_email": {"type": "string", "description": "Adresse email destinataire (peut être une liste séparée par des virgules)"},
-        "subject": {"type": "string", "description": "Sujet du mail"},
-        "message": {"type": "string", "description": "Contenu du mail (texte ou HTML si is_html=True)"},
-        "is_html": {"type": "boolean", "description": "Si True, le message est interprété comme HTML (défaut: False)", "nullable": True},
-        "attachment_path": {"type": "string", "description": "Chemin vers un fichier à joindre (optionnel)", "nullable": True}
+        "recipient_email": {"type": "string", "description": "Email du destinataire"},
+        "subject": {"type": "string", "description": "Sujet de l'email"},
+        "message": {"type": "string", "description": "Contenu du message (HTML ou texte)"},
+        "is_html": {"type": "boolean", "description": "Message HTML ?", "nullable": True},
+        "attachment_path": {"type": "string", "description": "Chemin du fichier joint", "nullable": True}
     }
 
     output_type = "string"
 
     def forward(
         self,
-        smtp_server: str,
-        smtp_port: int,
-        sender_email: str,
-        sender_password: str,
         recipient_email: str,
         subject: str,
         message: str,
         is_html: bool = False,
         attachment_path: Optional[str] = None
     ) -> str:
+
         try:
-            # Validation
-            if not all([smtp_server, sender_email, sender_password, recipient_email, subject, message]):
-                return "Erreur: Tous les champs obligatoires doivent être remplis."
+            api_key = os.getenv("BREVO_API_KEY")
+            sender_email = os.getenv("SENDER_EMAIL", "no-reply@agent-ia.com")
 
-            # Création du mail
-            msg = MIMEMultipart()
-            msg["From"] = sender_email
-            msg["To"] = recipient_email
-            msg["Subject"] = subject
+            if not api_key:
+                return "Erreur : clé API Brevo manquante."
 
-            # Ajouter le message (texte ou HTML)
-            msg_type = "html" if is_html else "plain"
-            msg.attach(MIMEText(message, msg_type))
+            configuration = sib_api_v3_sdk.Configuration()
+            configuration.api_key['api-key'] = api_key
 
-            # Ajouter la pièce jointe si fournie
+            api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+                sib_api_v3_sdk.ApiClient(configuration)
+            )
+
+            email_data = {
+                "to": [{"email": recipient_email}],
+                "subject": subject,
+                "sender": {"email": sender_email, "name": "candidAI"},
+                "htmlContent": message if is_html else None,
+                "textContent": message if not is_html else None,
+            }
+
+            # 📎 Pièce jointe
             if attachment_path and os.path.isfile(attachment_path):
-                with open(attachment_path, "rb") as attachment:
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(attachment.read())
-                    encoders.encode_base64(part)
-                    part.add_header(
-                        'Content-Disposition',
-                        f'attachment; filename= {os.path.basename(attachment_path)}'
-                    )
-                    msg.attach(part)
-                logger.info(f"Pièce jointe ajoutée: {attachment_path}")
+                with open(attachment_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
 
-            # Connexion SMTP
-            if smtp_port == 465:
-                # SSL
-                server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-            else:
-                # TLS
-                server = smtplib.SMTP(smtp_server, smtp_port)
-                server.starttls()
+                email_data["attachment"] = [{
+                    "content": encoded,
+                    "name": os.path.basename(attachment_path)
+                }]
 
-            server.login(sender_email, sender_password)
+            api_instance.send_transac_email(email_data)
 
-            # Envoi
-            server.send_message(msg)
-            server.quit()
+            return f"📧 Email envoyé avec succès à {recipient_email}"
 
-            logger.info(f"Email envoyé de {sender_email} à {recipient_email}")
-            attachment_info = f" avec pièce jointe ({os.path.basename(attachment_path)})" if attachment_path else ""
-            return f"E-mail envoyé à {recipient_email} avec succès !{attachment_info}"
-
-        except FileNotFoundError:
-            return f"Erreur: Le fichier de pièce jointe '{attachment_path}' n'existe pas."
-        except smtplib.SMTPAuthenticationError:
-            return "Erreur: Échec de l'authentification. Vérifiez l'email et le mot de passe."
-        except smtplib.SMTPException as e:
-            return f"Erreur SMTP lors de l'envoi du mail : {e}"
+        except ApiException as e:
+            return f"Erreur Brevo API : {e}"
         except Exception as e:
-            logger.error(f"Erreur envoi email: {e}")
-            return f"Erreur lors de l'envoi du mail : {e}"
+            return f"Erreur lors de l'envoi de l'email : {e}"
