@@ -4,7 +4,14 @@ import os
 import json
 from typing import Optional
 from tools import BuildWord, BuildPDF, BuildExcelPro, SendMail
+from langfuse import Langfuse
 
+
+langfuse = Langfuse(
+    host="https://cloud.langfuse.com",
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY")
+)
 
 def create_agent():
     custom_instructions = """
@@ -90,7 +97,11 @@ def chat_with_agent(session_id: str, message: str) -> dict:
 
     agent = _get_agent_cached()
     # 🔒 GARDE-FOU
-    output = agent.run(message)
+
+    with langfuse.start_as_current_observation(as_type="span", name="forlangraph") as obs:
+        obs.update(input={"user": message})
+        output = str(agent.run(message))
+        obs.update(output={"agent": output})
 
     # Gestion fichier éventuel
     if "||" in output:
